@@ -1,0 +1,13 @@
+1. The code is ran on collab instead of jupyter as it needs high RAM and GPU for models like pynote and whispher.
+
+2.All the code is in the "working_inbound_call_code"  txt file.
+
+3. The "call_recordings" folder contain mp3 files which are in English.
+
+4.Diarisation and Transcription is done on those mp3 files and the output is stored in the folder "transcriptions"
+
+5.The diarised txt files in the "transcriptions" folder is copied and pasted in another folder called "diarized_speech"
+
+6.Now we run the summarisation code and here the input folder is the "diarized_speech" folder containing the txt files and output of the summarisation is stored is "summarised" folder.
+
+7.Now we do sentiment analysis on those summarised txt file and here the input folder is the "summarised" folder and the output is stored in "results" folder.

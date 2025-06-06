@@ -1,0 +1,1116 @@
+# Diarisation
+######################################################################
+pip install python-dotenv
+pip install noisereduce
+pip install pydub
+pip install bertopic
+pip install pyloudnorm
+pip install pyannote.audio
+!pip install -U openai-whisper
+!pip install transformers bertopic sentencepiece pandas
+pip install torch
+
+
+
+with open('.env', 'w') as f:
+    f.write('HUGGINGFACE_TOKEN=hf_pRSBkpKZLf')  # Replace with your actual token
+
+print("✅ .env file created successfully!")
+
+#Diarisation
+import os
+import re
+import torch
+import torchaudio
+import numpy as np
+from pydub import AudioSegment
+from transformers import pipeline
+from pyannote.audio import Pipeline
+import noisereduce as nr
+import whisper
+import tempfile
+import logging
+import argparse
+import time
+import gc
+from dotenv import load_dotenv
+from tqdm import tqdm
+from collections import Counter
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Create a console handler with a custom formatter to make logs more visible
+console_handler = logging.StreamHandler()
+console_formatter = logging.Formatter('\n👉 %(asctime)s - %(levelname)s - %(message)s', '%H:%M:%S')
+console_handler.setFormatter(console_formatter)
+console_handler.setLevel(logging.INFO)
+
+# Add the handler to the logger
+logger.addHandler(console_handler)
+
+# Load environment variables
+load_dotenv()
+
+class AudioProcessor:
+    def __init__(self, input_folder, output_folder, whisper_model_size='large', hf_token=None, skip_diarization=False, skip_translation=False):
+        # Validate input/output folders
+        if not os.path.isdir(input_folder):
+            raise ValueError(f"Input folder does not exist: {input_folder}")
+
+        # Validate Whisper model size
+        valid_models = ["tiny", "base", "small", "medium", "large"]
+        if whisper_model_size not in valid_models:
+            raise ValueError(f"Invalid model size. Must be one of {valid_models}")
+
+        self.input_folder = input_folder
+        self.output_folder = output_folder
+        self.whisper_model_size = whisper_model_size  # Store model size for later loading/unloading
+
+        # Use torch.device object instead of string
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.skip_diarization = skip_diarization
+        self.skip_translation = skip_translation
+
+        # Initialize model references to None for memory management
+        self.whisper_model = None
+        self.translator = None
+        self.diarization_pipeline = None
+        self.hf_token = hf_token or os.environ.get("HUGGINGFACE_TOKEN")
+
+        logger.info(f"🔧 Using device: {self.device}")
+
+        # Ensure output folder exists
+        os.makedirs(output_folder, exist_ok=True)
+
+        # Banking-specific term corrections
+        self.banking_terms = {
+            'correct_spelling': {
+                'ucobank': 'UCO Bank',
+                'check': 'cheque',
+                'ac manager': 'account manager',
+                'eco bank': 'UCO Bank',
+                'deleteted': 'debited',
+                'saluted': 'credited'
+            },
+            'capitalize': [
+                'cheque', 'account', 'transfer', 'deposit',
+                'branch', 'manager', 'bank', 'customer'
+            ]
+        }
+
+        # Set up language mapping for translation (removed Urdu)
+        self.lang_map = {
+            "bn": "ben_Beng",
+            "hi": "hin_Deva",
+            "gu": "guj_Gujr",
+            "kn": "kan_Knda",
+            "ml": "mal_Mlym",
+            "mr": "mar_Deva",
+            "ne": "npi_Deva",
+            "or": "ory_Orya",
+            "pa": "pan_Guru",
+            "ta": "tam_Taml",
+            "te": "tel_Telu",
+        }
+
+        # Hindi-specific prompt mapping for better context understanding
+        self.hindi_prompts = {
+            "general": "बैंकिंग ग्राहक सेवा कॉल रिकॉर्डिंग",
+            "account": "खाता संबंधी जानकारी",
+            "transaction": "लेन-देन संबंधी जानकारी",
+            "service": "ग्राहक सेवा संबंधी जानकारी"
+        }
+
+
+    def load_whisper_model(self):
+        """Load the Whisper model into memory"""
+        if self.whisper_model is None:
+            logger.info(f"🔄 Loading Whisper {self.whisper_model_size} model...")
+            self.whisper_model = whisper.load_model(self.whisper_model_size, device=self.device)
+            logger.info(f"✅ Whisper model loaded successfully")
+
+    def unload_whisper_model(self):
+        """Unload the Whisper model to free memory"""
+        if self.whisper_model is not None:
+            logger.info("🔄 Unloading Whisper model to free memory...")
+            del self.whisper_model
+            self.whisper_model = None
+            # Force garbage collection
+            gc.collect()
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            logger.info("✅ Whisper model unloaded")
+
+    def load_translation_model(self):
+        """Load the translation model into memory"""
+        if self.skip_translation:
+            return
+
+        if self.translator is None:
+            logger.info("🔄 Loading translation model...")
+            try:
+                # Use the correct device mapping for pipeline
+                device_id = 0 if torch.cuda.is_available() else -1
+                self.translator = pipeline(
+                    "translation",
+                    model="facebook/nllb-200-1.3B",
+                    tokenizer="facebook/nllb-200-1.3B",
+                    device=device_id
+                )
+                logger.info("✅ Translation model loaded successfully")
+            except Exception as e:
+                logger.error(f"❌ Failed to load translation model: {e}")
+                logger.warning("⚠️ Translation will be skipped")
+                self.skip_translation = True
+
+    def unload_translation_model(self):
+        """Unload the translation model to free memory"""
+        if self.translator is not None:
+            logger.info("🔄 Unloading translation model to free memory...")
+            del self.translator
+            self.translator = None
+            # Force garbage collection
+            gc.collect()
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            logger.info("✅ Translation model unloaded")
+
+    def load_diarization_model(self):
+        """Load the diarization model into memory"""
+        if self.skip_diarization:
+            return
+
+        if self.diarization_pipeline is None:
+            logger.info("🔄 Loading diarization model...")
+            if not self.hf_token:
+                logger.error("❌ No Hugging Face token provided. Set HUGGINGFACE_TOKEN environment variable or use --token argument")
+                logger.warning("⚠️ Diarization will be skipped")
+                self.skip_diarization = True
+            else:
+                try:
+                    # First load the pipeline, then move to device
+                    self.diarization_pipeline = Pipeline.from_pretrained(
+                        "pyannote/speaker-diarization",
+                        use_auth_token=self.hf_token
+                    )
+                    # Use the proper torch.device object with to()
+                    self.diarization_pipeline = self.diarization_pipeline.to(self.device)
+                    logger.info("✅ Diarization model loaded successfully")
+                except Exception as e:
+                    logger.error(f"❌ Failed to load diarization model: {e}")
+                    logger.warning("⚠️ Diarization will be skipped")
+                    self.skip_diarization = True
+
+    def unload_diarization_model(self):
+        """Unload the diarization model to free memory"""
+        if self.diarization_pipeline is not None:
+            logger.info("🔄 Unloading diarization model to free memory...")
+            del self.diarization_pipeline
+            self.diarization_pipeline = None
+            # Force garbage collection
+            gc.collect()
+            torch.cuda.empty_cache() if torch.cuda.is_available() else None
+            logger.info("✅ Diarization model unloaded")
+
+    def enhance_audio_quality(self, audio_path):
+        """Enhanced audio preprocessing for better transcription"""
+        try:
+            sound = AudioSegment.from_file(audio_path)
+            sound = sound.set_channels(1).set_frame_rate(16000)  # Convert to mono 16kHz
+
+            enhanced_path = f"{audio_path}_enhanced.wav"
+            sound.export(enhanced_path, format="wav")
+
+            return enhanced_path
+        except Exception as e:
+            logger.error(f"🔇 Audio enhancement failed: {e}")
+            return audio_path
+
+    def reduce_noise(self, audio_path):
+        """Reduce noise in audio file and return path to cleaned file"""
+        try:
+            logger.info("🔄 Reducing noise...")
+            y, sr = torchaudio.load(audio_path)
+            if y.shape[0] > 1:  # Convert stereo to mono
+                y = torch.mean(y, dim=0, keepdim=True)
+
+            # Define chunk size for large files (30 seconds of audio at given sample rate)
+            CHUNK_SIZE = 30 * sr
+
+            # Process in chunks if audio is long
+            if y.shape[1] > CHUNK_SIZE:
+                logger.info(f"🔄 Processing long audio in chunks ({y.shape[1]/sr:.1f} seconds)")
+                reduced_chunks = []
+
+                # Process chunks with progress bar
+                total_chunks = (y.shape[1] + CHUNK_SIZE - 1) // CHUNK_SIZE
+                for i in tqdm(range(0, y.shape[1], CHUNK_SIZE), total=total_chunks, desc="Noise reduction"):
+                    chunk = y[:, i:min(i+CHUNK_SIZE, y.shape[1])]
+                    reduced_chunk = nr.reduce_noise(y=chunk.squeeze().numpy(), sr=sr)
+                    # Use from_numpy instead of torch.tensor to avoid warnings
+                    reduced_chunks.append(torch.from_numpy(reduced_chunk).float())
+
+                reduced_noise = torch.cat(reduced_chunks, dim=0)
+            else:
+                y_np = y.squeeze().numpy()
+                reduced_noise = nr.reduce_noise(y=y_np, sr=sr,prop_decrease=0.8,freq_mask_smooth_hz=200)
+
+            # Save to temporary file
+            temp_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            # Properly convert numpy array to torch tensor to avoid warnings
+            if isinstance(reduced_noise, np.ndarray):
+                reduced_noise_tensor = torch.from_numpy(reduced_noise).float()
+            else:  # Already a tensor
+                reduced_noise_tensor = reduced_noise
+
+            # Make sure it's properly shaped for torchaudio.save
+            if reduced_noise_tensor.dim() == 1:
+                reduced_noise_tensor = reduced_noise_tensor.unsqueeze(0)
+
+            torchaudio.save(temp_file.name, reduced_noise_tensor, sr)
+            logger.info("✅ Noise reduction complete")
+            return temp_file.name
+        except Exception as e:
+            logger.error(f"❌ Error reducing noise: {e}")
+            return audio_path  # Return original if something fails
+
+    def correct_transcription(self, text):
+        """Fix common banking term errors automatically"""
+        try:
+            # Correct spelling mistakes
+            for wrong, correct in self.banking_terms['correct_spelling'].items():
+                text = re.sub(rf'\b{wrong}\b', correct, text, flags=re.IGNORECASE)
+
+            # Capitalize important terms
+            for term in self.banking_terms['capitalize']:
+                text = re.sub(rf'\b{term}\b', term.capitalize(), text, flags=re.IGNORECASE)
+
+            # Clean up formatting
+            text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces
+            text = re.sub(r'(\.\s){2,}', '. ', text)  # Fix repeated punctuation
+
+            return text
+        except Exception as e:
+            logger.error(f"✏️ Correction failed: {e}")
+            return text
+
+    def verify_language(self, audio_path):
+        """Improved language detection with context-aware transcription"""
+        # Ensure model is loaded
+        self.load_whisper_model()
+
+        # First try with automatic detection
+        auto_result = self.whisper_model.transcribe(
+            audio_path,
+            language=None,
+            initial_prompt="Banking customer service call about account transactions",
+            temperature=0.1,
+            best_of=3
+        )
+        detected_lang = auto_result["language"]
+
+        # List of Indian languages we expect
+        indian_langs = ["hi", "bn", "en", "mr", "ta", "te", "gu", "kn", "ml", "pa"]
+
+        # If detected language is not in our expected list, try forcing Indian languages
+        if detected_lang not in indian_langs:
+            logger.info(f"🔄 Unexpected language {detected_lang}, trying Indian languages...")
+            for lang in ["hi", "bn", "en"]:  # Try Hindi first, then Bengali, then English
+                try:
+                    forced_result = self.whisper_model.transcribe(
+                        audio_path,
+                        language=lang,
+                        initial_prompt="बैंकिंग ग्राहक सेवा" if lang == "hi" else
+                                     "ব্যাংকিং গ্রাহক সেবা" if lang == "bn" else
+                                     "Banking customer service",
+                        temperature=0.1
+                    )
+                    return forced_result, lang
+                except Exception as e:
+                    continue
+
+        return auto_result, detected_lang
+
+    def translate_text(self, text, src_lang):
+        """Improved translation with sentence-level processing"""
+        if self.skip_translation or src_lang not in self.lang_map:
+            return None
+
+        # Ensure model is loaded
+        self.load_translation_model()
+
+        try:
+            logger.info(f"🔄 Translating from {src_lang} to English...")
+
+            # Split into sentences first
+            sentences = []
+            for line in text.split('\n'):
+                # Split Hindi sentences (using '।' as delimiter)
+                if src_lang == "hi":
+                    sentences.extend([s.strip() for s in line.split('।') if s.strip()])
+                else:
+                    sentences.append(line.strip())
+
+            translations = []
+
+            for sent in tqdm(sentences, desc="Translating"):
+                if not sent:
+                    continue
+
+                try:
+                    # Add proper sentence termination for Hindi
+                    if src_lang == "hi" and not sent.endswith('।'):
+                        sent += '।'
+
+                    translation = self.translator(
+                        sent,
+                        src_lang=self.lang_map[src_lang],
+                        tgt_lang="eng_Latn",
+                        max_length=512
+                    )[0]["translation_text"]
+                    translations.append(translation)
+                except Exception as e:
+                    logger.warning(f"Translation failed for sentence: {sent[:50]}...")
+                    continue
+
+            # Join with appropriate punctuation
+            joiner = ". " if src_lang != "hi" else " "
+            return joiner.join(translations)
+        except Exception as e:
+            logger.error(f"❌ Translation error: {e}")
+            return None
+
+    def diarize_audio(self, audio_path):
+        """Perform speaker diarization with label normalization"""
+        if self.skip_diarization:
+            return []
+
+        # Ensure model is loaded
+        self.load_diarization_model()
+
+        try:
+            logger.info("🔄 Performing speaker diarization...")
+            diarization = self.diarization_pipeline(audio_path)
+            segments = []
+            speaker_counts = {}
+
+            for turn, _, speaker in diarization.itertracks(yield_label=True):
+                # Normalize speaker labels (e.g., "SPEAKER_01" -> "Agent")
+                if speaker not in speaker_counts:
+                    speaker_counts[speaker] = len(speaker_counts) + 1
+
+                speaker_label = "Agent" if speaker_counts[speaker] == 1 else "Customer"
+
+                segments.append({
+                    "start": turn.start,
+                    "end": turn.end,
+                    "speaker": speaker_label
+                })
+
+            logger.info(f"✅ Diarization complete - identified {len(speaker_counts)} speakers")
+            return segments
+        except Exception as e:
+            logger.error(f"❌ Diarization error: {e}")
+            return []
+
+    def process_diarized_segments(self, audio_path, segments, full_transcript, detected_lang):
+        """Assign speaker labels to existing transcription using diarization timings"""
+        logger.info("🔄 Processing diarized segments...")
+        diarized_transcript = []
+
+        # Ensure model is loaded
+        self.load_whisper_model()
+
+        try:
+            # Get word-level timings from the original transcription
+            logger.info("🔄 Obtaining word-level timestamps...")
+            result = self.whisper_model.transcribe(audio_path, language=detected_lang, word_timestamps=True)
+
+            # Initialize a list to store all words with their timings
+            all_words = []
+            for segment in result["segments"]:
+                if "words" in segment:
+                    all_words.extend(segment["words"])
+
+            # Better error handling for word timings
+            if not all_words:
+                logger.warning("⚠️ Word-level timings not available, falling back to simple diarization")
+                return self.fallback_diarization(audio_path, segments, detected_lang)
+
+            # Process each diarization segment
+            logger.info(f"🔄 Matching {len(segments)} speaker segments with word timings...")
+            for seg in tqdm(segments, desc="Matching speakers to words"):
+                seg_start = seg["start"]
+                seg_end = seg["end"]
+
+                # Find words that fall within this speaker's time segment
+                seg_words = [
+                    word["word"] for word in all_words
+                    if seg_start <= word["start"] <= seg_end
+                ]
+
+                if seg_words:
+                    seg_text = " ".join(seg_words).strip()
+                    diarized_transcript.append(f"{seg['speaker']}: {seg_text}")
+                else:
+                    diarized_transcript.append(f"{seg['speaker']}: [No speech detected]")
+
+            logger.info("✅ Segment processing complete")
+            return diarized_transcript
+        except Exception as e:
+            logger.error(f"❌ Error processing segments: {e}")
+            return []
+
+    def fallback_diarization(self, audio_path, segments, detected_lang):
+        """Fallback when word timings aren't available"""
+        logger.info("🔄 Using fallback diarization method...")
+        diarized_transcript = []
+        audio_segment = AudioSegment.from_file(audio_path)
+
+        # Ensure model is loaded
+        self.load_whisper_model()
+
+        for i, seg in enumerate(tqdm(segments, desc="Processing audio segments")):
+            start_ms = int(seg["start"] * 1000)
+            end_ms = int(seg["end"] * 1000)
+            chunk = audio_segment[start_ms:end_ms]
+
+            with tempfile.NamedTemporaryFile(suffix='.wav') as temp_file:
+                chunk.export(temp_file.name, format="wav")
+                result = self.whisper_model.transcribe(temp_file.name, language=detected_lang)
+                diarized_transcript.append(f"{seg['speaker']}: {result['text'].strip()}")
+
+        logger.info("✅ Fallback diarization complete")
+        return diarized_transcript
+
+    def chunk_and_transcribe(self, audio_path, detected_lang, chunk_ms=30000):
+          """Chunk audio into short parts and transcribe to avoid hallucination"""
+          sound = AudioSegment.from_file(audio_path)
+          chunks = [sound[i:i+chunk_ms] for i in range(0, len(sound), chunk_ms)]
+          transcript = []
+
+          self.load_whisper_model()
+
+          # Create initial prompt based on available data
+          initial_prompt = "Banking customer service call"
+          if hasattr(self, 'hindi_prompts') and detected_lang == "hi":
+              initial_prompt = " ".join(self.hindi_prompts.values())
+          elif detected_lang in self.lang_map:
+              initial_prompt = "Banking customer service call"
+
+          for i, chunk in enumerate(chunks):
+              with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_chunk:
+                  chunk.export(temp_chunk.name, format="wav")
+                  try:
+                      result = self.whisper_model.transcribe(
+                          temp_chunk.name,
+                          language=detected_lang,
+                          temperature=0.2,
+                          initial_prompt=initial_prompt
+                      )
+                      transcript.append(result["text"].strip())
+                  except Exception as e:
+                      logger.warning(f"Chunk {i} failed: {e}")
+                      # Try again without initial prompt if it fails
+                      try:
+                          result = self.whisper_model.transcribe(
+                              temp_chunk.name,
+                              language=detected_lang,
+                              temperature=0.2
+                          )
+                          transcript.append(result["text"].strip())
+                      except Exception as e:
+                          logger.error(f"Chunk {i} failed completely: {e}")
+                          transcript.append("[TRANSCRIPTION FAILED]")
+
+          return " ".join(transcript)
+
+
+    def process_file(self, filename):
+        """Process a single audio file with enhanced accuracy"""
+        input_path = os.path.join(self.input_folder, filename)
+        base_name = os.path.splitext(filename)[0]
+
+        logger.info(f"🎧 Processing: {filename}")
+        start_time = time.time()
+        temp_files = []
+
+        try:
+            # Load required models based on tasks
+            self.load_whisper_model()
+            if not self.skip_translation:
+                self.load_translation_model()
+            if not self.skip_diarization:
+                self.load_diarization_model()
+
+            # Convert to WAV if MP3
+            if filename.lower().endswith('.mp3'):
+                logger.info("🔄 Converting MP3 to WAV...")
+                sound = AudioSegment.from_mp3(input_path)
+                wav_path = tempfile.NamedTemporaryFile(suffix='.wav', delete=False).name
+                sound.export(wav_path, format="wav")
+                temp_files.append(wav_path)
+                logger.info("✅ Conversion complete")
+            else:
+                wav_path = input_path
+
+            # Enhance audio quality first
+            enhanced_wav = self.enhance_audio_quality(wav_path)
+            temp_files.append(enhanced_wav)
+
+            # Reduce noise
+            clean_wav = self.reduce_noise(enhanced_wav)
+            temp_files.append(clean_wav)
+
+            # Full file transcription with improved language handling
+            logger.info("🔄 Transcribing audio with enhanced detection...")
+            result, detected_lang = self.verify_language(clean_wav)
+            raw_text = result["text"].strip()
+            # Detect excessive repetition
+            words = raw_text.split()
+            most_common = Counter(words).most_common(1)
+            if most_common and most_common[0][1] / len(words) > 0.3:
+                logger.warning("⚠️ Detected repetition in transcription. Retrying with chunked fallback.")
+                raw_text = self.chunk_and_transcribe(clean_wav, detected_lang)
+
+
+
+            # Apply banking-specific corrections
+            transcribed_text = self.correct_transcription(raw_text)
+            logger.info(f"✅ Transcription complete - Language: {detected_lang}")
+
+            # Save full transcription
+            output_path = os.path.join(self.output_folder, f"{base_name}_original.txt")
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(transcribed_text)
+            logger.info(f"📄 Original transcript saved to: {output_path}")
+
+            # Translate if needed
+            if not self.skip_translation and detected_lang in self.lang_map:
+                translated = self.translate_text(transcribed_text, detected_lang)
+                if translated:
+                    translation_path = os.path.join(self.output_folder, f"{base_name}_translated.txt")
+                    with open(translation_path, "w", encoding="utf-8") as f:
+                        f.write(translated)
+                    logger.info(f"📄 Translation saved to: {translation_path}")
+
+            # Diarization with improved error handling
+            if not self.skip_diarization:
+                diarized_segments = self.diarize_audio(clean_wav)
+
+                if diarized_segments:
+                    diarized_transcript = self.process_diarized_segments(
+                        clean_wav,
+                        diarized_segments,
+                        transcribed_text,
+                        detected_lang
+                    )
+
+                    if diarized_transcript:  # Only save if we got results
+                        diarized_path = os.path.join(self.output_folder, f"{base_name}_diarized.txt")
+                        with open(diarized_path, "w", encoding="utf-8") as f:
+                            f.write("\n".join(diarized_transcript))
+                        logger.info(f"📄 Diarized transcript saved to: {diarized_path}")
+                    else:
+                        logger.warning("⚠️ Diarization produced no usable output")
+
+            processing_time = time.time() - start_time
+            logger.info(f"✅ File processing complete in {processing_time:.1f} seconds")
+            return True  # Successfully processed
+
+        except Exception as e:
+            logger.error(f"❌ Error processing {filename}: {e}")
+            return False
+
+        finally:
+            # Clean up temp files
+            for tmp_file in temp_files:
+                if os.path.exists(tmp_file):
+                    try:
+                        os.unlink(tmp_file)
+                    except Exception as e:
+                        logger.error(f"❌ Error removing temporary file {tmp_file}: {e}")
+
+            # Unload models after processing to free memory
+            self.unload_whisper_model()
+            self.unload_translation_model()
+            self.unload_diarization_model()
+
+    def process_all_files(self):
+        """Process all audio files in the input folder with progress tracking"""
+        audio_extensions = ['.mp3', '.wav', '.flac', '.ogg', '.m4a']
+        files = [f for f in os.listdir(self.input_folder)
+                if any(f.lower().endswith(ext) for ext in audio_extensions)]
+
+        files_processed = 0
+        files_failed = 0
+
+        logger.info(f"🔍 Found {len(files)} audio files to process")
+        start_time = time.time()
+
+        for i, filename in enumerate(files, 1):
+            logger.info(f"\n{'='*50}")
+            logger.info(f"🎵 Processing file {i}/{len(files)}: {filename}")
+            logger.info(f"{'='*50}")
+
+            if self.process_file(filename):
+                files_processed += 1
+            else:
+                files_failed += 1
+
+        total_time = time.time() - start_time
+        logger.info(f"\n{'='*50}")
+        logger.info(f"🏁 Processing complete in {total_time:.1f} seconds")
+        logger.info(f"✅ Successfully processed: {files_processed}/{len(files)}")
+
+        if files_failed > 0:
+            logger.warning(f"⚠️ Failed: {files_failed}/{len(files)}")
+
+        return files_processed, files_failed
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Process audio files with noise reduction, transcription, translation, and diarization")
+
+    parser.add_argument("--input", "-i", type=str, help="Input folder containing audio files")
+    parser.add_argument("--output", "-o", type=str, help="Output folder for transcriptions")
+    parser.add_argument("--model", "-m", type=str, default="large", choices=["tiny", "base", "small", "medium", "large"], help="Whisper model size")
+    parser.add_argument("--token", "-t", type=str, help="Hugging Face token for diarization (or set HUGGINGFACE_TOKEN env var)")
+    parser.add_argument("--skip-diarization", action="store_true", help="Skip speaker diarization")
+    parser.add_argument("--skip-translation", action="store_true", help="Skip translation")
+
+    # This will ignore unknown arguments rather than erroring out
+    args, unknown = parser.parse_known_args()
+
+    if args.input and args.output:
+        processor = AudioProcessor(
+            input_folder=args.input,
+            output_folder=args.output,
+            whisper_model_size=args.model,
+            hf_token=args.token,
+            skip_diarization=args.skip_diarization,
+            skip_translation=args.skip_translation
+        )
+        processor.process_all_files()
+    else:
+        # Default execution
+        input_folder = "/content/drive/MyDrive/UCO_inbound2/call_recordings"
+        output_folder = "/content/drive/MyDrive/UCO_inbound2/transcriptions"
+        hf_token = os.environ.get("HUGGINGFACE_TOKEN")
+
+        processor = AudioProcessor(
+            input_folder=input_folder,
+            output_folder=output_folder,
+            whisper_model_size="large",
+            hf_token=hf_token,
+            skip_diarization=False,
+            skip_translation=False
+        )
+        processor.process_all_files()
+
+
+
+##################################################################
+
+#Summarisation
+
+import os
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from dotenv import load_dotenv
+import torch
+
+# --- Configuration ---
+load_dotenv()  # Load HUGGINGFACE_TOKEN from .env
+input_folder = "/content/drive/MyDrive/UCO_inbound2/diarized_speech"
+output_folder = "/content/drive/MyDrive/UCO_inbound2/summarised"
+os.makedirs(output_folder, exist_ok=True)
+
+# --- Load Mistral-7B with GPU offloading ---
+model_name = "mistralai/Mistral-7B-Instruct-v0.2"
+token = os.getenv("HUGGINGFACE_TOKEN")
+
+tokenizer = AutoTokenizer.from_pretrained(
+    model_name,
+    token=token,
+    padding_side="left"
+)
+
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    token=token,
+    device_map="auto",
+    torch_dtype=torch.float16
+)
+
+# --- Summarization pipeline ---
+summarizer = pipeline(
+    "text-generation",
+    model=model,
+    tokenizer=tokenizer
+)
+
+# --- Optimized Summarization Function ---
+def mistral_summarize(text, max_total_tokens=8192):
+    base_prompt = f"""You are a professional assistant summarizing detailed customer service calls.
+Your task is to write a comprehensive summary in paragraph form (not bullet points), capturing:
+- The full timeline of events discussed,
+- Specific actions taken by the customer and bank,
+- Emotions expressed (anger, frustration, satisfaction, confusion),
+- Any resolutions, next steps, or unresolved concerns.
+
+Use clear and formal language. Do not skip important details or simplify too much.
+
+Conversation:
+{text}
+
+Detailed Summary:"""
+
+    prompt_ids = tokenizer(base_prompt, return_tensors="pt").input_ids[0]
+    prompt_len = len(prompt_ids)
+
+    if prompt_len >= max_total_tokens:
+        print(f"⚠️ Truncating input: prompt too long ({prompt_len} tokens).")
+        allowed_prompt_tokens = max_total_tokens // 2  # Keep half for prompt
+        truncated_prompt_ids = prompt_ids[-allowed_prompt_tokens:]
+        prompt = tokenizer.decode(truncated_prompt_ids, skip_special_tokens=True)
+        prompt_len = allowed_prompt_tokens
+    else:
+        prompt = base_prompt
+
+    max_gen_tokens = max_total_tokens - prompt_len
+
+    output = summarizer(
+        prompt,
+        max_new_tokens=max_gen_tokens,
+        do_sample=True,
+        temperature=0.3,
+        pad_token_id=tokenizer.eos_token_id
+    )
+
+    generated = output[0]['generated_text']
+    return generated.split("Detailed Summary:")[-1].strip() if "Detailed Summary:" in generated else generated.strip()
+
+# --- Process Files ---
+for filename in os.listdir(input_folder):
+    if filename.endswith(".txt"):
+        input_path = os.path.join(input_folder, filename)
+        output_path = os.path.join(output_folder, f"{os.path.splitext(filename)[0]}_summary.txt")
+
+        with open(input_path, "r", encoding="utf-8") as f:
+            text = f.read().replace("Agent:", "Agent: ").replace("Customer:", "Customer: ")
+            text = " ".join(text.split())  # Clean up whitespace
+
+        try:
+            summary = mistral_summarize(text)
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(summary)
+            print(f"✅ Summarized: {filename}")
+        except Exception as e:
+            print(f"❌ Error on {filename}: {str(e)}")
+
+print("🎉 Done!")
+
+##################################################################
+# Sentiment Analysis and Topic Categorisation
+
+import os
+import torch
+import logging
+import pandas as pd
+import re
+from tqdm import tqdm
+from sentence_transformers import SentenceTransformer, util
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+# ------------------ Setup Logging ------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# ------------------ Paths ------------------
+INPUT_FOLDER = "/content/drive/MyDrive/UCO_inbound2/summarised"
+OUTPUT_FOLDER = "/content/drive/MyDrive/UCO_inbound2/results"
+TOPICS_FILE_PATH = "/content/drive/MyDrive/UCO_inbound2/results/topic_categorisation.txt"
+
+# ------------------ Load Topics ------------------
+def load_topics_from_file(file_path):
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+            dict_start = content.find('{')
+            dict_end = content.rfind('}') + 1
+            dict_content = content[dict_start:dict_end]
+            topics_dict = eval(dict_content)
+        logger.info(f"✅ Loaded topics from: {file_path}")
+        return topics_dict
+    except Exception as e:
+        logger.error(f"❌ Failed to load topics: {str(e)}")
+        raise
+
+# ------------------ Load Summarized Text Files ------------------
+def load_summarized_files(folder_path):
+    files_data = []
+
+    for filename in os.listdir(folder_path):
+        if filename.endswith('.txt'):
+            file_path = os.path.join(folder_path, filename)
+
+            encodings_to_try = ['utf-8-sig', 'utf-8', 'ISO-8859-1']
+            for enc in encodings_to_try:
+                try:
+                    with open(file_path, 'r', encoding=enc, errors='replace') as f:
+                        content = f.read()
+
+                    files_data.append({
+                        'filename': filename,
+                        'content': content
+                    })
+                    logger.info(f"✅ Loaded file {filename} using encoding: {enc}")
+                    break
+                except UnicodeDecodeError:
+                    logger.warning(f"⚠️ Failed to load {filename} with encoding: {enc}")
+            else:
+                logger.error(f"❌ Unable to decode file {filename} using tried encodings.")
+
+    logger.info(f"📦 Loaded {len(files_data)} summarized text files")
+    return files_data
+
+# ------------------ Topic Embeddings ------------------
+def compute_all_example_embeddings(model, topics_dict):
+    topic_examples = []
+    topic_labels = []
+    for topic, examples in topics_dict.items():
+        for example in examples:
+            topic_examples.append(example)
+            topic_labels.append(topic)
+
+    logger.info(f"🧠 Encoding {len(topic_examples)} topic examples...")
+    example_embeddings = model.encode(topic_examples, batch_size=32, convert_to_tensor=True)
+    return topic_examples, topic_labels, example_embeddings
+
+def match_text_to_topic(text, model, topic_labels, example_embeddings, threshold=0.6):
+    if not text.strip():
+        return "Other / Unclassified", 0.0
+
+    # Split text into chunks (max 512 tokens) for better processing
+    chunks = [text[i:i+1024] for i in range(0, len(text), 1024)]
+    chunk_embeddings = model.encode(chunks, convert_to_tensor=True)
+
+    # Average chunk embeddings to get document embedding
+    if len(chunks) > 1:
+        text_embedding = torch.mean(chunk_embeddings, dim=0)
+    else:
+        text_embedding = chunk_embeddings[0]
+
+    # Compare with topic examples
+    cos_scores = util.cos_sim(text_embedding, example_embeddings)[0]
+    top_index = torch.argmax(cos_scores).item()
+    top_score = cos_scores[top_index].item()
+
+    # Get top 3 matches for detailed analysis
+    top_indices = torch.topk(cos_scores, min(3, len(cos_scores)))[1].tolist()
+    top_matches = [(topic_labels[idx], cos_scores[idx].item()) for idx in top_indices]
+
+    logger.info(f"Top matches: {top_matches}")
+
+    if top_score >= threshold:
+        return topic_labels[top_index], round(top_score, 3)
+    else:
+        return "Other / Unclassified", round(top_score, 3)
+
+# ------------------ Text Cleanup ------------------
+def clean_text(text):
+    """Clean up text for processing"""
+    if not isinstance(text, str):
+        return ""
+
+    # Remove excessive spaces
+    text = re.sub(r'\s+', ' ', text).strip()
+
+    # Fix common artifacts
+    text = re.sub(r'\.{2,}', '...', text)  # Standardize ellipses
+    text = re.sub(r' ', '', text)  # Remove replacement character
+    text = re.sub(r'\( *\)', '', text)  # Remove empty parentheses
+    text = re.sub(r'\[ *\]', '', text)  # Remove empty brackets
+
+    return text.strip()
+
+# ------------------ Sentiment Analysis ------------------
+def analyze_sentiment(text, tokenizer, model):
+    if not isinstance(text, str) or text.strip() == "":
+        return 'neutral', 0.0
+
+    # Split text into chunks for processing
+    chunks = [text[i:i+512] for i in range(0, len(text), 512)]
+    sentiment_scores = []
+
+    for chunk in chunks:
+        if not chunk.strip():
+            continue
+
+        inputs = tokenizer(chunk, return_tensors='pt', truncation=True, padding=True, max_length=512)
+        with torch.no_grad():
+            outputs = model(**inputs)
+        probs = torch.nn.functional.softmax(outputs.logits, dim=1)[0]
+        sentiment_scores.append(probs)
+
+    if not sentiment_scores:
+        return 'neutral', 0.0
+
+    # Average sentiment scores across chunks
+    avg_sentiment = torch.mean(torch.stack(sentiment_scores), dim=0)
+    max_idx = torch.argmax(avg_sentiment).item()
+    sentiment_labels = ['negative', 'neutral', 'positive']
+
+    return sentiment_labels[max_idx], round(avg_sentiment[max_idx].item(), 3)
+
+# ------------------ Main Analysis Function ------------------
+def analyze_file(content, topic_model, topic_labels, topic_embeddings, sentiment_tokenizer, sentiment_model):
+    """Analyze a single file's content"""
+
+    # Clean content
+    cleaned_content = clean_text(content)
+
+    # Match to topic
+    topic, topic_score = match_text_to_topic(
+        cleaned_content, topic_model, topic_labels, topic_embeddings, threshold=0.55
+    )
+
+    # Analyze sentiment
+    sentiment, sentiment_score = analyze_sentiment(
+        cleaned_content, sentiment_tokenizer, sentiment_model
+    )
+
+    # Return results
+    return {
+        'content': content,
+        'topic': topic,
+        'topic_confidence': topic_score,
+        'sentiment': sentiment,
+        'sentiment_confidence': sentiment_score
+    }
+
+# ------------------ Save Results ------------------
+def save_results(filename, results, output_folder):
+    """Save analysis results to output folder"""
+    output_path = os.path.join(output_folder, f"{os.path.splitext(filename)[0]}_analyzed.txt")
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(f"File: {filename}\n")
+        f.write(f"Topic: {results['topic']} (Confidence: {results['topic_confidence']})\n")
+        f.write(f"Sentiment: {results['sentiment']} (Confidence: {results['sentiment_confidence']})\n")
+        f.write("\n--- Original Content ---\n\n")
+        f.write(results['content'])
+
+    # Print results to console
+    print(f"\n----- Results for {filename} -----")
+    print(f"Topic: {results['topic']} (Confidence: {results['topic_confidence']:.3f})")
+    print(f"Sentiment: {results['sentiment']} (Confidence: {results['sentiment_confidence']:.3f})")
+    print("---------------------------------\n")
+
+    logger.info(f"✅ Saved analysis results to: {output_path}")
+    return output_path
+
+# ------------------ Main ------------------
+def main():
+    # Check if output folder exists, create if it doesn't
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    logger.info(f"🚀 Starting text analysis using device: {device}")
+
+    # Load models
+    logger.info("📚 Loading sentence transformer model...")
+    topic_model = SentenceTransformer('all-MiniLM-L6-v2').to(device)
+
+    logger.info("📚 Loading sentiment model...")
+    sentiment_tokenizer = AutoTokenizer.from_pretrained("cardiffnlp/twitter-xlm-roberta-base-sentiment")
+    sentiment_model = AutoModelForSequenceClassification.from_pretrained("cardiffnlp/twitter-xlm-roberta-base-sentiment").to(device)
+
+    # Load topics
+    logger.info("📂 Loading topic categories...")
+    topics_dict = load_topics_from_file(TOPICS_FILE_PATH)
+    topic_examples, topic_labels, example_embeddings = compute_all_example_embeddings(
+        topic_model, topics_dict
+    )
+
+    # Load summarized files
+    files_data = load_summarized_files(INPUT_FOLDER)
+
+    # Create summary dataframe to store all results
+    summary_data = []
+
+    # Process each file
+    for file_data in tqdm(files_data, desc="Analyzing files"):
+        filename = file_data['filename']
+        content = file_data['content']
+
+        logger.info(f"📄 Processing file: {filename}")
+
+        # Analyze content
+        results = analyze_file(
+            content,
+            topic_model,
+            topic_labels,
+            example_embeddings,
+            sentiment_tokenizer,
+            sentiment_model
+        )
+
+        # Save individual results
+        output_path = save_results(filename, results, OUTPUT_FOLDER)
+
+        # Add to summary data
+        summary_data.append({
+            'filename': filename,
+            'topic': results['topic'],
+            'topic_confidence': results['topic_confidence'],
+            'sentiment': results['sentiment'],
+            'sentiment_confidence': results['sentiment_confidence'],
+            'output_file': output_path
+        })
+
+    # Create and save summary report - just one CSV with all the information
+    summary_df = pd.DataFrame(summary_data)
+    summary_path = os.path.join(OUTPUT_FOLDER, "analysis_summary.csv")
+    summary_df.to_csv(summary_path, index=False)
+    logger.info(f"📊 Saved summary report to: {summary_path}")
+
+    # Print summary statistics
+    print("\n===== ANALYSIS COMPLETE =====")
+    print(f"Total files processed: {len(files_data)}")
+
+    # Topic distribution
+    print("\n----- TOPIC DISTRIBUTION -----")
+    topic_counts = summary_df['topic'].value_counts()
+    for topic, count in topic_counts.items():
+        percentage = (count / len(summary_df)) * 100
+        print(f"{topic}: {count} files ({percentage:.1f}%)")
+
+    # Sentiment distribution
+    print("\n----- SENTIMENT DISTRIBUTION -----")
+    sentiment_counts = summary_df['sentiment'].value_counts()
+    for sentiment, count in sentiment_counts.items():
+        percentage = (count / len(summary_df)) * 100
+        print(f"{sentiment}: {count} files ({percentage:.1f}%)")
+
+    print("\n=============================")
+    print(f"Detailed results saved to: {OUTPUT_FOLDER}")
+    print(f"Summary CSV saved to: {summary_path}")
+    print("=============================\n")
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+

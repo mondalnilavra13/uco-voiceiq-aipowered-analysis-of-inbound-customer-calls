@@ -1,0 +1,3 @@
+filename,topic,topic_confidence,sentiment,sentiment_confidence,output_file
+english_diarized_summary.txt,cheque issues,0.594,negative,0.476,/content/drive/MyDrive/UCO_inbound2/results/english_diarized_summary_analyzed.txt
+english_2_diarized_summary.txt,pension / benefit credit issues,0.589,negative,0.614,/content/drive/MyDrive/UCO_inbound2/results/english_2_diarized_summary_analyzed.txt

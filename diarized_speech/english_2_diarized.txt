@@ -1,0 +1,201 @@
+Agent: welcome  in  yuko  bank.  This  is  the  RMSSQ.
+Agent: Mr.  Ramesh.
+Agent: May
+Agent: use  your  account  for  a  pension  account?  My  details  are  in  pension.
+Agent: Mr.  Ramesh.  I  am  unable  to  understand  the  language.  Can  you  speak  in  comfortable  English?
+Customer: [No speech detected]
+Agent: [No speech detected]
+Agent: sir.
+Agent: I  use  your  account  for  a  pension  account?
+Customer: I  use
+Agent: details  are  in  pension.  My  pension  account  is  in  yuko  bank.
+Agent: Mr.  Ramesh.  I  am  unable  to  understand  the  language.  Can  you  speak  in  comfortable  English?
+Agent: I  am  not  comfortable  in  English.  Can  you  speak  in  English?  Okay,  so  how  can  I  use  your  account  for  a  pension  account?
+Agent: are  in  pension.  My  pension  account  is  in  yuko  bank.  Okay.
+Agent: you.
+Agent: a  message
+Agent: on  28  March.  Okay,  what  was  it?  First,  this
+Customer: it?
+Agent: is  pension,  this  personal  account.
+Agent: Among  these,  the  details  in  your  pension  account.
+Agent: is  there.
+Agent: Till  now,  I  have  not  received  pension
+Agent: in  my  account.  Okay,  as  I  understood  that,  you  received  a  message  that  you  have  pension.  So,  pension  was  credited  to  your  account  but  till  now,  the  amount  not  credited  to  your  account.  Ever  read,  sir?
+Agent: That's  at  home.  I  have  not  received.  Sir,  haven't  you  checked  with  the  branch?
+Agent: Branch?  Probably,  there  is  a  branch  number  at  your  port.  Okay.
+Agent: is  not  here.
+Agent: you  try  to...  Or  did  not.  Or  not
+Agent: going  into.
+Customer: going
+Agent: know,  when  you  try  to  connect.
+Agent: When
+Agent: you  try  to  contact  on  the  holidays  or  working  days?  After  11  from  6  morning.
+Agent: 11  means?
+Agent: time.  That  is  today  after  11  am.
+Agent: time  5  am.
+Agent: am  asking  are  you  calling  try  to  contact  the  bank  on  the  working  time  or  different  time?
+Agent: onwards  you  tried,  you  tried  to  contact  today  onwards  am  I  right  sir?
+Agent: onwards,  today  I  started  contact  time.  Today  is  not  day  1  am.  I  really  so  just  say  this  sir  as  I  understood  that  you  received  a  message  that  you  have.  I  always  not  getting  through.
+Customer: that  you  have.  I  always  not  getting
+Agent: as  I  understood  that  sir.  You  have  pension  not  credit  sheet  account  but  you  got  the  message  that  your  account  pension  is  already  credit  sheet  account  am  I  right  sir?
+Customer: [No speech detected]
+Customer: [No speech detected]
+Agent: is  every  month  in  the  last  of  month  sir  in  25  am  I  received  message  from  first  that  your  account  is  not  credit  sheet  account.  So  you  have  to  send  credit  sheet  into  pension  amount  is  credited  in  your  bank  account.  Ok.  Bank  account.  Ok.  On  last  day  of  the  month  I  am  getting  pension.
+Agent: I  understand.  I  am  getting  credit  sheet  into  bank  account.
+Customer: I  am  getting  credit
+Agent: sir  as  I  understood.  But  every  year  I  am  getting  pension  on  top.
+Customer: as  I  understood.  But  every  year
+Agent: 1st.
+Agent: are  getting  the  pension  on  top  at  time.
+Agent: sir.  So  I  am  getting  pension  on  top.  I  will  send  that  sir.  We  will  schedule  the  show  message  on  that.  Sir  my  name.
+Agent: gave  my  account  number.  Sir  my  name  sir.
+Agent: My  name  is  Topan  Kumar  Day.
+Agent: Topan  Kumar  Day.  Sir.  Data  for  11 -11 -1962.
+Customer: [No speech detected]
+Agent: -11 -1962.  Thank  you  for  giving  me  the  information  sir.  Sir  I  showed  this  information  from  mavalin  that  is  new  asset  check  the  pension  account  details.  Ok  sir.
+Agent: if  you  if  you  want  to  try  to  conduct  the  bank  on  the  1st  of  March.  Do  you  want  to  conduct  today  is  the  holiday?  Today  is  the  holy  day.  Today  is  the  holy  day.
+Agent: today  is  the  holy  day.  Today  is  not  holy  day.  Today  is  time  to  open  for  public.  Yes  sir.  Yes  sir.  That  only  said  sir.  Public  is  not.  Public  is  not  doing  public  business.  So  that  only  said  sir.  Today  is  not  bank  is  not  working  for  the  public.  So  you  while  trying  to  conduct  also  they  will  not  getting  the  call  and  response.
+Customer: sir.  Yes  sir.  That  only  said  sir.  Public  is  not.
+Customer: is  not  doing
+Customer: So  that
+Agent: sir.  So.  Wait  wait  wait  wait.
+Agent: Automatically  it  is  getting.  Sir.  when  bank  is  being  informed  from  pension  discretion  authority  and  they  are  sending  account  what  will  be  the  key  income  on  the  SSP  date
+Agent: I  understand  your  concern  sir  but  you  have  checked  here  as  per  your  details  your  last  credit  transaction  25th  March
+Agent: there  is  no  transaction  will  happen  to  your  account  if  you  want  to  check  your  transaction  of  the  pension  account  details  you  can  check  by  visiting  bank  or  you  can  try  to  call  at  the  bank  that's  how  you  are  going  to  get  a  check  and  so  which  is  for  me  from  my  point  of  view  you  have  to  check  here  listen  listen  listen  listen  listen
+Agent: whenever  account  is  credited  in  amount  I  am  getting  a  check  ok  now  I  am  checking  with  Pension
+Agent: Island  amount
+Agent: N  Banking  N  Banking  also  has  a  check  ok  that  is  application  so  I  am  checking
+Agent: I  am  checking
+Agent: balance  amount  is  not  increasing  sir  that  only  is  check  sir  is  getting  any  delay  or  you  said  that  your  pension  is  already  initiated  from  the  pension  department  but  not  credited  to  your  account  am  I  right  sir
+Agent: sir  this  is  for  sure  sir  as  I  understand  that  sir  I  need  to  confirm  that  have  you  received  any  message  that  your  cash  flow  limit  80 %  or  100 %  you  are  trying  to  like
+Agent: what  what  cash  flow  limit  cash
+Agent: you  received  any  message  from  the  bank  end  here  why  if  you  this  too  much  noise  this  keep  rolling  sir
+Agent: you  received  any  too  much  background  noise
+Agent: haven't  you  received  any  hmm
+Agent: haven't  you  received  any  message  from  the  bank  end  sir  you  are  valuing  your  like  that  any  message  ok  again  again  quick  check  and  all  coming
+Agent: yes  yes  yes  sir  then  sir  I  solicit  for  month  yes  for  the  month  is  coming  I  need  to  confirm  that  haven't  you  received  any  message  that  you  are  valuing
+Agent: your  customer  like  that  any  message  from  the  bank  end
+Agent: i  am  not  receiving  any  message
+Agent: asking  for  the  not  the  credit  transfer  haven't  you  received  any  message  from  the  bank  end
+Agent: but  from  bank  i  have  not  received  message  you  are  valuing  your  pathologic  with  your  account  number  and  to
+Customer: valuing
+Agent: date  active  you  should  contact  your  branch  immediately  or  kindly  request  you  dear  customer  kindly  contact  your  branch  for  the  reviewing  your  account  profit  periodic  compensation  of  the  kivg  haven't  received  any  message  like  that  sir  no
+Customer: [No speech detected]
+Customer: [No speech detected]
+Customer: [No speech detected]
+Customer: that
+Agent: not  to  me  that  is  you  know  you  are  saying  k1c  even  i  have  sent  email  to  bank  i
+Agent: emailed  our  number  is  registered  email  i  have  sent  i  didn't  send  any  reply  sir
+Agent: i  am  asking  not
+Agent: for  the  kivg  i  am  asking  haven't  you  received  any  fantastic  limited  cheating  messages  no
+Agent: nothing  let's  see  so
+Agent: i  checked  here  jyc  classical  receipts  updated  okay  already  updated  already  updated  online  updated  online
+Customer: jyc
+Agent: updated  so  you  get  a  confirmation  message  regarding  that  sir  yes  yes  i  confirm  confirmation  you  may  change  or  that  you  are  providing  okay  so  i  checked  here  that's  right  around  one  week  sir
+Customer: [No speech detected]
+Agent: understand  that  sir  by  checking  that  account  will  be  dormant  you  cannot  do  transition  why
+Agent: i'm  making  statements  to  which  account  is  connected  i'm  able  to  make  your  assignment
+Agent: sir  i  need  to  confirm  that  your  threshold  limit  your  credit  transfer  is  limited  the  debit  transfer  limit  will  exceed  sorry  sir
+Agent: can  i  share  the  details  sir
+Customer: can  i  share  the
+Agent: am  sharing  that  once  your  answers  limit  got  exceeded  maybe  your  account  or  credit  transfer  or  debit  answer  will  reach
+Agent: that  only  confirmed  that  i  haven't  received  any  threshold  limit  basis  so  no  message  is  the  account  that  you  see  can  have  current  minutes  make  payments  profit  this  is  connected  to  bank  account  because
+Customer: [No speech detected]
+Agent: i  take  care  as  for  your  last  credit  and  debit  transaction  26
+Agent: months  after  there  is  no  transit  will  happen  to  you  that's  why  i  did  not  require  okay  so  i  request  you  for  the  checking  the  pension  details  you  can  check  with  the  branch  of  prospective  customer  cancer  because  from  maharan  there  is  no  answer  to  check  that  if  any  i  have  a  message  to  check  your  pension  details  i  definitely  help  you  on  that  but
+Customer: [No speech detected]
+Agent: i  sorry  to  inform  you  from  maharan  there  is  no  access  to  check  the  pension  is  by  getting  delay  or
+Agent: device  uh  is  is  is  is  more
+Customer: uh
+Agent: than  six
+Agent: [No speech detected]
+Agent: is  is  is
+Customer: is
+Agent: [No speech detected]
+Customer: [No speech detected]
+Agent: is  is  is  is
+Customer: [No speech detected]
+Agent: [No speech detected]
+Agent: [No speech detected]
+Agent: [No speech detected]
+Agent: is  is  so  is  so  fanatic  is  so  is  such  to  be  run  run  us
+Agent: can  i
+Agent: put
+Agent: ВАР
+Agent: [No speech detected]
+Agent: [No speech detected]
+Customer: [No speech detected]
+Agent: [No speech detected]
+Agent: leak
+Agent: [No speech detected]
+Agent: 275  752
+Agent: need  only  right  I  am  I  will  confirm  that
+Agent: number  I  am  calling  or  not
+Agent: it  is  this  number  only  I  am  calling  one  more  number  was  there  note  the  number  also
+Agent: [No speech detected]
+Agent: [No speech detected]
+Agent: 03222  267360
+Agent: [No speech detected]
+Agent: 267360
+Agent: 267360
+Agent: number  also  the  bank  number  was  there  you  try  to  contact  the  branch  on  the  working  time  ok  sir  on  the  working  time  only  you  try  to  contact  them  ok
+Agent: is  not  working  today  is  not  working  today  is  not  working  working  time  for  the  sir  today
+Customer: [No speech detected]
+Customer: not
+Agent: is  not  open  also  sir  they  were  working  for  the  bank  and  only  for  the  financial  strategy  so  for  the  closing  only  wait  and  wait  and  wait  and  wait  if  the  bank  is  not  attending  the  call
+Customer: wait
+Agent: the  ring
+Agent: will  I  will  get  the  ring
+Agent: am  not  getting  the  ring  there  is  pressure  now  they  cannot  pressure  the  collection  sir
+Agent: [No speech detected]
+Agent: sir  sir  sir  so  it  is  not  getting  the  ring  I  am  telling  you  yes  sir  I  understand  I  can  say  I  apologize  for  what  is  the  course  from  the  bank  and  sir  once  check  it  sir  you
+Agent: it  is  only  training  to  say  that  also  yes  sir  I  understand  that  sir  that  only  it  is  there  so  once  try  to  contact  them  they  will  help  you  on  that
+Agent: here  if  I  am  going  to  any  site  they  will  not  be  able  to  help  me  because  the  PTC  is  not  on  branch
+Agent: sir  I  understand  that  you  are  concerned  sir  once  you  check  with  them  they  will  help  you  on  that
+Agent: for  that  checking  the  pension  status  and  details  you  can  check  to  the  nearest  by  reference  you
+Agent: any  reference  number  or  details  you  can  check  with  the  branch  nearest  to  branch  they  will  help  you  on  that  if  the  amount  is  credited  or  not  they
+Customer: any  reference
+Agent: will  give  you  the  clarification  on  that
+Agent: only,  basis,  basis,
+Agent: business  want  to  be  able  to  tell  me  the  balance  and  whether  amount  has  been  credited  or  not  that  I  can  see  in  internet  net
+Agent: banking  also  I  can  see
+Agent: UEM  banking,  banking,  N -banking  and  PAN  also  I  can  see
+Agent: [No speech detected]
+Agent: if  it  runs  what  I  will  do  I  will  tell  you
+Agent: I  am  getting  a  PTC
+Agent: from  a  PTC  from  a  patient  there  it  will  show
+Agent: sir  I  understand  you  are  concerned  sir
+Agent: it  may  be  of  same  content
+Agent: you  check  it  out  they  will  tell  you  that  another  PTC  who
+Agent: that  PTC  that  is  not  mentioned  in  PTC  it
+Agent: given  in  UEM  PTC
+Agent: sir  I  understand  you  PTC  is  given  in  UEM  PTC  yes  sir  I  understand  you  are  concerned  there  is  some  reason  you  complain  to  the  PTC  yes  sir
+Agent: are  not  going  to  end  the  UEM  PTC
+Agent: is  concerned  in  UEM  branch
+Agent: else  I  must  mention  about  UEM  PTC  yes
+Customer: UEM  PTC  yes
+Agent: [No speech detected]
+Agent: is  anything  else  sir  apart
+Agent: from  this  no  no  anything  else  no  no  I  mean
+Customer: no  no
+Agent: is  something  known  also  they  alltogether
+Customer: something
+Agent: will  close  that  for  about
+Agent: two  months  we  will  sign  PPA  is  that  clear  sir  believe  me  or  rescheduling  sorry
+Customer: [No speech detected]
+Customer: [No speech detected]
+Agent: or  we  have  a  NA  releasedравlенно  to  META  try  to  conduct  the  plan  they  will  help  you  in  that  is
+Agent: else  I  must  understand  this  about  your  bank  so
+Agent: [No speech detected]
+Agent: please  be  your  nature
+Customer: nature
+Agent: [No speech detected]
+Agent: [No speech detected]
+Agent: please
+Agent: be  online  and  checking  any  index  solution  okay  okay  okay  so
+Agent: I
+Agent: will  wait  I  am  using  online
+Agent: if  is  anything  else  message  to  the  see  you  go  back
+Agent: no  nothing  so  please  be  all  right  your  call  is  important  to  us  so  in  transferring  call  to  feedback  menu  you  can  write  there  one  two  four  as  for  the  conversation  okay  I'm  online  on  this  for  five  seconds  thank  you  for  calling  you  go  back  have  nice
+Customer: right
+Customer: [No speech detected]
